@@ -29,6 +29,7 @@ import (
 
 	"github.com/llm-d/llm-d-inference-sim/pkg/common"
 	kvcache "github.com/llm-d/llm-d-inference-sim/pkg/kv-cache"
+	openaiserverapi "github.com/llm-d/llm-d-inference-sim/pkg/openai-server-api"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -92,6 +93,7 @@ func startServerWithArgs(ctx context.Context, mode string, args []string, envs m
 	for _, lora := range config.LoraModules {
 		s.loraAdaptors.Store(lora.Name, "")
 	}
+	s.loras.maxLoras = s.config.MaxLoras
 
 	common.InitRandom(s.config.Seed)
 
@@ -109,7 +111,7 @@ func startServerWithArgs(ctx context.Context, mode string, args []string, envs m
 	}
 
 	if s.config.EnableKVCache {
-		s.kvcacheHelper, err = kvcache.NewKVCacheHelper(s.config, s.logger, s.kvCacheUsageChan, s.tokenizer)
+		s.kvcacheHelper, err = kvcache.NewKVCacheHelper(s.config, s.logger, s.metrics.kvCacheUsageChan, s.tokenizer)
 		if err != nil {
 			return nil, err
 		}
@@ -122,11 +124,23 @@ func startServerWithArgs(ctx context.Context, mode string, args []string, envs m
 	userMsgTokens = int64(len(common.Tokenize(userMessage)))
 
 	// run request processing workers
+	s.workers = make(chan *worker, s.config.MaxNumSeqs)
+	s.workerFinished = make(chan *worker, s.config.MaxNumSeqs)
 	for i := 1; i <= s.config.MaxNumSeqs; i++ {
-		go s.reqProcessingWorker(ctx, i)
+		worker := &worker{
+			id:       i,
+			ctx:      ctx,
+			finished: s.workerFinished,
+			wc:       make(chan *openaiserverapi.CompletionReqCtx),
+			s:        s,
+		}
+		go worker.waitForRequests()
+		s.workers <- worker
 	}
 
 	s.startMetricsUpdaters(ctx)
+
+	go s.processing(ctx)
 
 	listener := fasthttputil.NewInmemoryListener()
 

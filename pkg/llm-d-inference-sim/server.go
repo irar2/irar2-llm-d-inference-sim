@@ -55,7 +55,7 @@ func (s *VllmSimulator) startServer(ctx context.Context, listener net.Listener) 
 	r.POST("/v1/load_lora_adapter", s.HandleLoadLora)
 	r.POST("/v1/unload_lora_adapter", s.HandleUnloadLora)
 	// supports /metrics prometheus API
-	r.GET("/metrics", fasthttpadaptor.NewFastHTTPHandler(promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{})))
+	r.GET("/metrics", fasthttpadaptor.NewFastHTTPHandler(promhttp.HandlerFor(s.metrics.registry, promhttp.HandlerOpts{})))
 	// supports standard Kubernetes health and readiness checks
 	r.GET("/health", s.HandleHealth)
 	r.GET("/ready", s.HandleReady)
@@ -146,6 +146,7 @@ func (s *VllmSimulator) readRequest(ctx *fasthttp.RequestCtx, isChatCompletion b
 // HandleChatCompletions http handler for /v1/chat/completions
 func (s *VllmSimulator) HandleChatCompletions(ctx *fasthttp.RequestCtx) {
 	s.logger.Info("chat completion request received")
+	s.logger.Info("request", "body", string(ctx.Request.Body()))
 	s.handleCompletions(ctx, true)
 }
 
@@ -210,12 +211,12 @@ func (s *VllmSimulator) HandleTokenize(ctx *fasthttp.RequestCtx) {
 
 func (s *VllmSimulator) HandleLoadLora(ctx *fasthttp.RequestCtx) {
 	s.logger.Info("load lora request received")
-	s.loadLora(ctx)
+	s.loadLoraAdaptor(ctx)
 }
 
 func (s *VllmSimulator) HandleUnloadLora(ctx *fasthttp.RequestCtx) {
 	s.logger.Info("unload lora request received")
-	s.unloadLora(ctx)
+	s.unloadLoraAdaptor(ctx)
 }
 
 func (s *VllmSimulator) validateRequest(req openaiserverapi.CompletionRequest) (string, int) {
