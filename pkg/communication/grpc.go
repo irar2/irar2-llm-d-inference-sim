@@ -69,7 +69,6 @@ func (c *Communication) Generate(in *pb.GenerateRequest, out grpc.ServerStreamin
 				if response.Tokens != nil {
 					chunk := respBuilder.createChunk(respCtx, response.Tokens)
 					if err := sendResponse(chunk, out); err != nil {
-						c.onResponseSendFinished(respCtx)
 						return err
 					}
 				}
@@ -85,7 +84,6 @@ func (c *Communication) Generate(in *pb.GenerateRequest, out grpc.ServerStreamin
 	} else {
 		resp = respBuilder.createResponse(respCtx, &tokens)
 	}
-	defer c.onResponseSendFinished(respCtx)
 	if err := sendResponse(resp, out); err != nil {
 		return err
 	}
