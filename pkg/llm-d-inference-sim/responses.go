@@ -21,7 +21,6 @@ import (
 
 	"github.com/llm-d/llm-d-inference-sim/pkg/common"
 	openaiserverapi "github.com/llm-d/llm-d-inference-sim/pkg/openai-server-api"
-	"github.com/llm-d/llm-d-kv-cache/pkg/tokenization"
 )
 
 // Implementation of request for /responses requests
@@ -73,40 +72,42 @@ func (r *responsesReqCtx) request() Request {
 	return r.req
 }
 
-func (r *responsesReqCtx) encode() ([]uint32, []string, *tokenization.MultiModalFeatures, error) {
-	var messages []openaiserverapi.ChatComplMessage
-
-	if r.req.Instructions != "" {
-		messages = append(messages, openaiserverapi.ChatComplMessage{
-			Role:    "system",
-			Content: openaiserverapi.ChatComplContent{Raw: r.req.Instructions},
-		})
-	}
-
-	for _, item := range r.req.Input {
-		if msg, ok := item.(*openaiserverapi.InputMessage); ok {
-			var content openaiserverapi.ChatComplContent
-			switch len(msg.Content) {
-			case 0:
-				// no content
-			case 1:
-				content = openaiserverapi.ChatComplContent{Raw: msg.Content[0].Text}
-			default:
-				blocks := make([]openaiserverapi.ChatComplContentBlock, len(msg.Content))
-				for i, c := range msg.Content {
-					blocks[i] = openaiserverapi.ChatComplContentBlock{Type: "text", Text: c.Text}
-				}
-				content = openaiserverapi.ChatComplContent{Structured: blocks}
+// convertInputToMessages converts ResponsesRequest Input to Messages
+func convertInputToMessages(input []openaiserverapi.InputItem) []openaiserverapi.Message {
+	messages := make([]openaiserverapi.Message, 0, len(input))
+	for _, item := range input {
+		if inputMsg, ok := item.(*openaiserverapi.InputMessage); ok {
+			msg := openaiserverapi.Message{
+				Role: inputMsg.Role,
 			}
-			messages = append(messages, openaiserverapi.ChatComplMessage{
-				Role:    msg.Role,
-				Content: content,
-			})
+
+			// Convert InputContent to ChatComplContent
+			if len(inputMsg.Content) == 1 && inputMsg.Content[0].Type == openaiserverapi.ResponsesInputText {
+				// Simple text content
+				msg.Content.Raw = inputMsg.Content[0].Text
+			} else {
+				// Structured content
+				blocks := make([]openaiserverapi.ChatComplContentBlock, 0, len(inputMsg.Content))
+				for _, content := range inputMsg.Content {
+					if content.Type == openaiserverapi.ResponsesInputText {
+						blocks = append(blocks, openaiserverapi.ChatComplContentBlock{
+							Type: "text",
+							Text: content.Text,
+						})
+					}
+				}
+				msg.Content.Structured = blocks
+			}
+
+			messages = append(messages, msg)
 		}
 	}
+	return messages
+}
 
-	tokens, strTokens, _, err := r.sim.Tokenizer.RenderChatCompletion(messages)
-	return tokens, strTokens, nil, err
+func (r *responsesReqCtx) encode() ([]uint32, []string, *openaiserverapi.RenderMMFeatures, error) {
+	messages := convertInputToMessages(r.req.Input)
+	return r.sim.Tokenizer.RenderMessages(messages)
 }
 
 func (r *responsesReqCtx) createToolCalls() ([]openaiserverapi.ToolCall, int, string, error) {
@@ -115,14 +116,14 @@ func (r *responsesReqCtx) createToolCalls() ([]openaiserverapi.ToolCall, int, st
 
 func (r *responsesReqCtx) tokenizedPromptForEcho() (*openaiserverapi.Tokenized, error) {
 	// echo the text of the last input message, matching chat completion behavior
-	text := ""
+	lastMsg := ""
 	if len(r.req.Input) > 0 {
+		// in echo mode return the last message without role
 		if msg, ok := r.req.Input[len(r.req.Input)-1].(*openaiserverapi.InputMessage); ok {
-			text = msg.ReadableText()
+			lastMsg = msg.PlainText(false)
 		}
 	}
-
-	tokens, strTokens, err := r.sim.Tokenizer.RenderText(text)
+	tokens, strTokens, err := r.sim.Tokenizer.RenderText(lastMsg)
 	if err != nil {
 		return nil, err
 	}

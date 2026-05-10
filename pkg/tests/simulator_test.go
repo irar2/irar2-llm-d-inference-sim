@@ -797,8 +797,9 @@ var _ = Describe("Simulator", func() {
 	Context("max-model-len context window validation", func() {
 		It("Should reject requests exceeding context window", func() {
 			ctx := context.TODO()
+			model := common.TestModelName
 			// Start server with max-model-len=10
-			args := []string{"cmd", "--model", common.TestModelName, "--mode", common.ModeRandom, "--max-model-len", "10"}
+			args := []string{"cmd", "--model", model, "--mode", common.ModeRandom, "--max-model-len", "10"}
 			client, err := startServerWithArgs(ctx, args)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -811,7 +812,7 @@ var _ = Describe("Simulator", func() {
 				"messages": [{"role": "user", "content": "%s"}],
 				"model": "%s",
 				"max_tokens": %d
-			}`, prompt, common.TestModelName, maxTokens)
+			}`, prompt, model, maxTokens)
 
 			resp, err := client.Post("http://localhost/v1/chat/completions", "application/json", strings.NewReader(reqBody))
 			Expect(err).NotTo(HaveOccurred())
@@ -830,7 +831,7 @@ var _ = Describe("Simulator", func() {
 			Expect(string(body)).To(ContainSubstring("BadRequestError"))
 
 			// Also test with OpenAI client to ensure it gets an error
-			openaiclient, params := getOpenAIClientAndChatParams(client, common.TestModelName, prompt, false)
+			openaiclient, params := getOpenAIClientAndChatParams(client, model, prompt, false)
 			params.MaxTokens = openai.Int(8)
 
 			_, err = openaiclient.Chat.Completions.New(ctx, params)
@@ -1652,7 +1653,7 @@ var _ = Describe("Simulator", func() {
 			msg, err := sub.Recv()
 			Expect(err).NotTo(HaveOccurred())
 			storedCount, removedCount, _ := kvcache.CountKVEventBlocks(msg.Frames, topic, 1)
-			Expect(storedCount).To(Equal(4))
+			Expect(storedCount).To(Equal(5))
 			Expect(removedCount).To(Equal(0))
 		})
 

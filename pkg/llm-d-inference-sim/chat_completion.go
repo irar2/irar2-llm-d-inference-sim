@@ -23,7 +23,6 @@ import (
 
 	"github.com/llm-d/llm-d-inference-sim/pkg/common"
 	openaiserverapi "github.com/llm-d/llm-d-inference-sim/pkg/openai-server-api"
-	"github.com/llm-d/llm-d-kv-cache/pkg/tokenization"
 )
 
 // Implementation of request for /chat/completions requests
@@ -79,7 +78,8 @@ func (c *ChatCompletionsRequest) createResponseContext(reqCtx requestContext, di
 func (c *chatCompletionReqCtx) tokenizedPromptForEcho() (*openaiserverapi.Tokenized, error) {
 	lastMsg := ""
 	if len(c.req.Messages) > 0 {
-		lastMsg = c.req.Messages[len(c.req.Messages)-1].Content.ReadableText()
+		// in echo mode return the last message without role
+		lastMsg = c.req.Messages[len(c.req.Messages)-1].PlainText(false)
 	}
 	tokens, strTokens, err := c.sim.Tokenizer.RenderText(lastMsg)
 	if err != nil {
@@ -100,8 +100,8 @@ func (c *chatCompletionReqCtx) request() Request {
 	return c.req
 }
 
-func (c *chatCompletionReqCtx) encode() ([]uint32, []string, *tokenization.MultiModalFeatures, error) {
-	return c.sim.Tokenizer.RenderChatCompletion(c.req.Messages)
+func (c *chatCompletionReqCtx) encode() ([]uint32, []string, *openaiserverapi.RenderMMFeatures, error) {
+	return c.sim.Tokenizer.RenderMessages(c.req.Messages)
 }
 
 func (c *chatCompletionReqCtx) createToolCalls() ([]openaiserverapi.ToolCall, int, string, error) {

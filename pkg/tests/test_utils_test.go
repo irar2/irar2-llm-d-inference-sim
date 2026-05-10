@@ -144,7 +144,10 @@ func startServerHelper(ctx context.Context, mode string, args []string, envs map
 	}
 	userMsgTokens = int64(len(tokens))
 	// calculate number of tokens for user message as chat/completions
-	tokens, _, _, err = s.Context.Tokenizer.RenderChatCompletion([]openaiserverapi.ChatComplMessage{{Role: openaiserverapi.RoleUser, Content: openaiserverapi.ChatComplContent{Raw: testUserMessage}}})
+	messages := []openaiserverapi.Message{
+		{Role: openaiserverapi.RoleUser,
+			Content: openaiserverapi.ChatComplContent{Raw: testUserMessage}}}
+	tokens, _, _, err = s.Context.Tokenizer.RenderMessages(messages)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -652,7 +655,8 @@ func getOpenAIClientAndTextParams(client option.HTTPClient, model string, messag
 
 // renders the given messages using the test model
 func getChatPromptTokensCountForTestModel(message string) int64 {
-	tokens, _, _, err := tokenizerMngr.TestTokenizer().RenderChatCompletion([]openaiserverapi.ChatComplMessage{{Role: openaiserverapi.RoleUser, Content: openaiserverapi.ChatComplContent{Raw: message}}})
+	messages := []openaiserverapi.Message{{Role: openaiserverapi.RoleUser, Content: openaiserverapi.ChatComplContent{Raw: message}}}
+	tokens, _, _, err := tokenizerMngr.TestTokenizer().RenderMessages(messages)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 
 	return int64(len(tokens))

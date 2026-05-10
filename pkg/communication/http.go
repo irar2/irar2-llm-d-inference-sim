@@ -428,6 +428,7 @@ func (c *Communication) readTokenizeRequest(ctx *fasthttp.RequestCtx) (*vllmapi.
 		c.logger.Error(err, "failed to unmarshal tokenize request body")
 		return nil, err
 	}
+
 	return &tokenizeReq, nil
 }
 
@@ -550,12 +551,14 @@ func (c *Communication) HandleTokenize(ctx *fasthttp.RequestCtx) {
 	}
 
 	var tokens []uint32
+
 	if req.Prompt != "" {
 		tokens, _, err = c.simulator.Context.Tokenizer.RenderText(req.Prompt)
 	} else {
 		// has messages
-		tokens, _, _, err = c.simulator.Context.Tokenizer.RenderChatCompletion(req.Messages)
+		tokens, _, _, err = c.simulator.Context.Tokenizer.RenderMessages(req.Messages)
 	}
+
 	if err != nil {
 		c.logger.Error(err, "failed to tokenize")
 		ctx.Error("Failed to tokenize, "+err.Error(), fasthttp.StatusInternalServerError)

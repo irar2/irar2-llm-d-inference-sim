@@ -17,8 +17,6 @@ limitations under the License.
 package vllmapi
 
 import (
-	"strings"
-
 	openaiserverapi "github.com/llm-d/llm-d-inference-sim/pkg/openai-server-api"
 )
 
@@ -30,22 +28,7 @@ type TokenizeRequest struct {
 	// Prompt is the text to tokenize
 	Prompt string `json:"prompt"`
 	// Messages is an array of messages to tokenize
-	Messages []openaiserverapi.ChatComplMessage `json:"messages"`
-}
-
-// GetPrompt returns the text to tokenize, either the text prompt
-// or the concatenation of the messages (we reject requests with both
-// prompt and messages set).
-func (t *TokenizeRequest) GetPrompt() string {
-	if t.Prompt != "" {
-		return t.Prompt
-	}
-
-	messages := make([]string, 0)
-	for _, message := range t.Messages {
-		messages = append(messages, message.Content.PlainText())
-	}
-	return strings.Join(messages, " ")
+	Messages []openaiserverapi.Message `json:"messages"`
 }
 
 // TokenizeResponse is a response for tokenize request

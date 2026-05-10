@@ -29,7 +29,7 @@ const (
 )
 
 var _ = Describe("tokenizer", func() {
-	messages := []openaiserverapi.ChatComplMessage{
+	messages := []openaiserverapi.Message{
 		{Role: openaiserverapi.RoleUser, Content: openaiserverapi.ChatComplContent{Raw: "q1"}},
 		{Role: openaiserverapi.RoleAssistant, Content: openaiserverapi.ChatComplContent{Raw: "a1"}},
 		{Role: openaiserverapi.RoleUser, Content: openaiserverapi.ChatComplContent{Raw: "q2"}},
@@ -47,7 +47,7 @@ var _ = Describe("tokenizer", func() {
 	})
 
 	It("should tokenize chat with simple tokenizer", func() {
-		tokens, strTokens, _, err := tokenizerMngr.TestTokenizer().RenderChatCompletion(messages)
+		tokens, strTokens, _, err := tokenizerMngr.TestTokenizer().RenderMessages(messages)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(tokens).NotTo(BeEmpty())
 		Expect(strTokens).NotTo(BeEmpty())
@@ -67,7 +67,7 @@ var _ = Describe("tokenizer", func() {
 
 	It("should tokenize chat with real tokenizer", func() {
 		// in /chat/completions case the string tokens are not returned
-		tokens, _, _, err := tokenizerMngr.RealTokenizer().RenderChatCompletion(messages)
+		tokens, _, _, err := tokenizerMngr.RealTokenizer().RenderMessages(messages)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(tokens).NotTo(BeEmpty())
 	})

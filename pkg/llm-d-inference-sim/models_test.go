@@ -92,7 +92,6 @@ var _ = Describe("CreateModelsResponse", func() {
 				MaxModelLen:      1024,
 			},
 		}
-
 		resp := s.CreateModelsResponse()
 		Expect(resp.Data).To(HaveLen(1))
 		Expect(resp.Data[0].ID).To(Equal("meta-llama/Llama-3-8B"))

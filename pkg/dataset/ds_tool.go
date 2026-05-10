@@ -61,7 +61,7 @@ type DatasetTool struct {
 
 // NewDatasetTool creates DatasetTool instance based on the given parameters
 func NewDatasetTool(ctx context.Context, config *DSToolConfiguration, logger logr.Logger) (*DatasetTool, error) {
-	t, err := tokenizer.NewHFTokenizer(ctx, logger, config.udsSocketPath, config.model)
+	t, err := tokenizer.NewHFTokenizer(ctx, logger, config.renderURL, config.model, config.renderTimeout, config.mmRenderTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (dt *DatasetTool) toOutputRecords(dsRecords []datasetRecord) []outputRecord
 
 	for index, dsRecord := range dsRecords {
 		chatRequest := openaiserverapi.ChatCompletionsRequest{}
-		chatRequest.Messages = []openaiserverapi.ChatComplMessage{}
+		chatRequest.Messages = []openaiserverapi.Message{}
 
 		// read conversations in pairs
 		for conversationIndex := 0; conversationIndex < len(dsRecord.Conversations)-1; conversationIndex += 2 {
@@ -219,7 +219,7 @@ func (dt *DatasetTool) conversationToOutputRecords(userTxt, assistantTxt string,
 	}
 
 	// add current user message
-	chatRequest.Messages = append(chatRequest.Messages, openaiserverapi.ChatComplMessage{
+	chatRequest.Messages = append(chatRequest.Messages, openaiserverapi.Message{
 		Role:    openaiserverapi.RoleUser,
 		Content: openaiserverapi.ChatComplContent{Raw: userTxt},
 	})
@@ -237,8 +237,9 @@ func (dt *DatasetTool) conversationToOutputRecords(userTxt, assistantTxt string,
 	}
 
 	// create db record for /chat/completions with all messages till now
-	inputTokens, _, _, err = dt.tokenizer.RenderChatCompletion(chatRequest.Messages)
-	rawInput := tokenizer.FlattenChatRequest(chatRequest.Messages)
+	inputTokens, _, _, err = dt.tokenizer.RenderMessages(chatRequest.Messages)
+
+	rawInput := tokenizer.FlattenMessages(chatRequest.Messages)
 	if err != nil {
 		return nil, errors.Join(err, fmt.Errorf("input tokenization failed (%s)", rawInput))
 	}
@@ -250,7 +251,7 @@ func (dt *DatasetTool) conversationToOutputRecords(userTxt, assistantTxt string,
 
 	// add answer for this turn to be ready for the next question
 	chatRequest.Messages = append(chatRequest.Messages,
-		openaiserverapi.ChatComplMessage{Role: openaiserverapi.RoleAssistant,
+		openaiserverapi.Message{Role: openaiserverapi.RoleAssistant,
 			Content: openaiserverapi.ChatComplContent{Raw: assistantTxt}})
 
 	return result, nil

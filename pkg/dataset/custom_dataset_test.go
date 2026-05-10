@@ -39,7 +39,7 @@ const (
 
 type validDBElement struct {
 	input          string
-	messages       []openaiserverapi.ChatComplMessage
+	messages       []openaiserverapi.Message
 	tokenizedInput openaiserverapi.Tokenized
 	hexa           string
 	respTokens     openaiserverapi.Tokenized
@@ -97,7 +97,7 @@ var _ = Describe("CustomDataset", Ordered, func() {
 
 		// #6 in db: intput2, message2, chat completions, short response
 		validDB[2].input = ""
-		validDB[2].messages = []openaiserverapi.ChatComplMessage{
+		validDB[2].messages = []openaiserverapi.Message{
 			{Role: openaiserverapi.RoleUser, Content: openaiserverapi.ChatComplContent{Raw: "Hello world!"}},
 			{Role: openaiserverapi.RoleAssistant, Content: openaiserverapi.ChatComplContent{Raw: "this is assistant long response, it should contain at least 10 tokens"}},
 			{Role: openaiserverapi.RoleUser, Content: openaiserverapi.ChatComplContent{Raw: "Hello world again"}},
@@ -118,7 +118,7 @@ var _ = Describe("CustomDataset", Ordered, func() {
 				tokens, strTokens, err = tokenizerMngr.RealTokenizer().RenderText(validDB[i].input)
 			} else {
 				// has messages
-				tokens, strTokens, _, err = tokenizerMngr.RealTokenizer().RenderChatCompletion(validDB[i].messages)
+				tokens, strTokens, _, err = tokenizerMngr.RealTokenizer().RenderMessages(validDB[i].messages)
 			}
 			Expect(err).ToNot(HaveOccurred())
 			Expect(tokens).ToNot(BeNil())
@@ -138,9 +138,9 @@ var _ = Describe("CustomDataset", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		// remove temp test db
+		// remove temp test db if exists
 		err := os.Remove(path)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).To(Or(BeNil(), MatchError(os.ErrNotExist)))
 		// remove test tokenizer directory
 		err = os.RemoveAll(tokenizerTmpDir)
 		Expect(err).NotTo(HaveOccurred())

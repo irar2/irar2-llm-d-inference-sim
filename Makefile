@@ -39,6 +39,8 @@ ZMQ_IMG ?= $(IMAGE_REGISTRY)/$(ZMQ_IMAGE_NAME):$(ZMQ_IMAGE_TAG)
 CONTAINER_TOOL := $(shell { command -v docker >/dev/null 2>&1 && echo docker; } || { command -v podman >/dev/null 2>&1 && echo podman; } || echo "")
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
 
+RENDER_PORT ?= 8082
+
 .PHONY: help
 help: ## Print help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -226,22 +228,19 @@ helm-uninstall: check-helm ## Uninstall the Helm chart release
 	@printf "\033[33;1m==== Uninstalling Helm chart $(HELM_RELEASE_NAME) ====\033[0m\n"
 	helm uninstall $(HELM_RELEASE_NAME) --namespace $(NAMESPACE) || true
 
-# Deploy the simulator with UDS tokenizer on kind
 KIND_CLUSTER_NAME ?= ${PROJECT_NAME}-dev
 HOST_PORT ?= 30080
 MODEL_NAME ?= TinyLlama/TinyLlama-1.1B-Chat-v1.0
-UDS_TOKENIZER_TAG ?= v0.7.1
-UDS_TOKENIZER_IMG_NAME ?= $(IMAGE_REGISTRY)/llm-d-uds-tokenizer:${UDS_TOKENIZER_TAG}
 HF_TOKEN ?= ""
 
+# Deploy the simulator and vllm renderer on kind
 .PHONY: dev-env-kind
-dev-env-kind: 
+dev-env-kind:
 	@printf "\033[33;1m==== Deploying on kind ====\033[0m\n"
 	CLUSTER_NAME=${KIND_CLUSTER_NAME} \
 	HOST_PORT=${HOST_PORT} \
 	MODEL_NAME=${MODEL_NAME} \
 	VLLM_SIMULATOR_IMAGE=${IMG} \
-	UDS_TOKENIZER_IMAGE=${UDS_TOKENIZER_IMG_NAME} \
 	./kind-deploy.sh
 
 .PHONY: clean-dev-env-kind
@@ -249,3 +248,8 @@ clean-dev-env-kind: ## Cleanup kind setup (delete cluster ${KIND_CLUSTER_NAME})
 	@echo "INFO: cleaning up kind cluster ${KIND_CLUSTER_NAME}"
 	kind delete cluster --name ${KIND_CLUSTER_NAME}
 
+
+.PHONY: run-render
+run-render: 
+	@echo "INFO: run vLLM render"
+	$(CONTAINER_TOOL) run --rm  -p $(RENDER_PORT):$(RENDER_PORT) --entrypoint vllm vllm/vllm-openai-cpu:v0.19.1 launch render $(MODEL_NAME) --port=$(RENDER_PORT)
