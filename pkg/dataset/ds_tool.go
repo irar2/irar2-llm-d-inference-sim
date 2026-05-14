@@ -215,7 +215,7 @@ func (dt *DatasetTool) conversationToOutputRecords(userTxt, assistantTxt string,
 
 	// create completions request
 	textRequest := openaiserverapi.TextCompletionsRequest{
-		Prompt: userTxt,
+		Prompt: openaiserverapi.NewStringOrArray(userTxt),
 	}
 
 	// add current user message
@@ -225,12 +225,12 @@ func (dt *DatasetTool) conversationToOutputRecords(userTxt, assistantTxt string,
 	})
 
 	// create db record for /completions (without the messages concatenation)
-	inputTokens, _, err := dt.tokenizer.RenderText(textRequest.Prompt)
+	inputTokens, _, err := dt.tokenizer.RenderText(textRequest.Prompt.String())
 	if err != nil {
-		return nil, errors.Join(err, fmt.Errorf("input tokenization failed (%s)", textRequest.Prompt))
+		return nil, errors.Join(err, fmt.Errorf("input tokenization failed (%s)", textRequest.Prompt.String()))
 	}
 
-	if rec, err := dt.createOutputRecord(inputTokens, assistantTxt, textRequest.Prompt); err != nil {
+	if rec, err := dt.createOutputRecord(inputTokens, assistantTxt, textRequest.Prompt.String()); err != nil {
 		return nil, err
 	} else {
 		result = append(result, *rec)

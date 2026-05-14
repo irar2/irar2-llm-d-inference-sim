@@ -194,7 +194,7 @@ var _ = Describe("Echo Dataset", Ordered, func() {
 	Context("getTokensInEchoMode", func() {
 		It("should return the same text, max tokens is not defined", func() {
 			req := &openaiserverapi.TextCompletionsRequest{
-				Prompt: theText,
+				Prompt: openaiserverapi.NewStringOrArray(theText),
 			}
 
 			promptTokenized := openaiserverapi.Tokenized{Tokens: theTextTokens, Strings: theTextStrTokens}
@@ -208,7 +208,7 @@ var _ = Describe("Echo Dataset", Ordered, func() {
 		It("should return the same text, max tokens is higher than the text length", func() {
 			maxTokens := int64(1000)
 			req := &openaiserverapi.TextCompletionsRequest{
-				Prompt:    theText,
+				Prompt:    openaiserverapi.NewStringOrArray(theText),
 				MaxTokens: &maxTokens,
 			}
 			promptTokenized := openaiserverapi.Tokenized{Tokens: theTextTokens, Strings: theTextStrTokens}
@@ -223,7 +223,7 @@ var _ = Describe("Echo Dataset", Ordered, func() {
 		It("should return the same text, finish reason is length", func() {
 			maxTokens := int64(2)
 			req := &openaiserverapi.TextCompletionsRequest{
-				Prompt:    theText,
+				Prompt:    openaiserverapi.NewStringOrArray(theText),
 				MaxTokens: &maxTokens,
 			}
 			promptTokenized := openaiserverapi.Tokenized{Tokens: theTextTokens, Strings: theTextStrTokens}
@@ -268,7 +268,7 @@ var _ = Describe("Echo Dataset", Ordered, func() {
 				chatReq.IgnoreEOS = ignoreEos
 				req = &chatReq
 			} else {
-				textReq := openaiserverapi.TextCompletionsRequest{Prompt: testPrompt, MaxTokens: maxTokens}
+				textReq := openaiserverapi.TextCompletionsRequest{Prompt: openaiserverapi.NewStringOrArray(testPrompt), MaxTokens: maxTokens}
 				textReq.IgnoreEOS = ignoreEos
 				req = &textReq
 			}

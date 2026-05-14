@@ -37,9 +37,10 @@ func (t *TextCompletionsRequest) validate(toolsValidator *toolsValidator) (strin
 	return validateRequest(t)
 }
 
-func (t *TextCompletionsRequest) buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo]) requestContext {
+func (t *TextCompletionsRequest) buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo],
+	choiceIdx int, doneFn func()) requestContext {
 	reqCtx := &textCompletionReqCtx{
-		baseRequestContext: newBaseRequestContext(simCtx, channel),
+		baseRequestContext: newBaseRequestContext(simCtx, channel, choiceIdx, doneFn),
 		req:                t,
 	}
 	// wire textCompletionReqCtx into embedded requestContext interface
@@ -49,6 +50,17 @@ func (t *TextCompletionsRequest) buildRequestContext(simCtx *SimContext, channel
 
 func (t *TextCompletionsRequest) AsString() string {
 	return "text completion request (req id " + t.RequestID + ")"
+}
+
+// duplicateWithPrompt creates a copy of the request with a new prompt and request ID
+// All other fields are copied from the original request
+func (t *TextCompletionsRequest) duplicateWithPrompt(prompt string, newRequestID string) Request {
+	duplicate := &TextCompletionsRequest{
+		TextCompletionsRequest: t.TextCompletionsRequest, // This copies all fields
+	}
+	duplicate.Prompt = openaiserverapi.NewStringOrArray(prompt)
+	duplicate.RequestID = newRequestID
+	return duplicate
 }
 
 func (t *TextCompletionsRequest) createResponseContext(reqCtx requestContext, displayModel string,
@@ -74,7 +86,7 @@ func (t *textCompletionReqCtx) request() Request {
 }
 
 func (t *textCompletionReqCtx) encode() ([]uint32, []string, *openaiserverapi.RenderMMFeatures, error) {
-	tokens, strTokens, err := t.sim.Tokenizer.RenderText(t.req.Prompt)
+	tokens, strTokens, err := t.sim.Tokenizer.RenderText(t.req.Prompt.String())
 	return tokens, strTokens, nil, err
 }
 

@@ -291,8 +291,10 @@ func (s *VllmSimulator) addRequestToQueue(reqCtx requestContext) {
 		s.Context.logger.Error(err, "failed to enqueue request")
 		err := openaiserverapi.NewError("Failed to enqueue request, "+err.Error(),
 			fasthttp.StatusTooManyRequests, nil)
-		common.WriteToChannel(reqCtx.responseChannel(), &ResponseInfo{Err: &err},
+		common.WriteToChannel(reqCtx.responseChannel(),
+			&ResponseInfo{Err: &err, ChoiceIdx: reqCtx.choiceIndex()},
 			s.Context.logger)
+		reqCtx.signalDone()
 		return
 	}
 	// increment the waiting requests metric
@@ -328,12 +330,37 @@ func (s *VllmSimulator) HandleRequest(req Request) (bool, *common.Channel[*Respo
 		return false, nil, &err, false
 	}
 
+	// Single shared channel for all prompts; each sub-request stamps its ChoiceIdx on
+	// responses and calls signalDone when it's finished. A watcher goroutine closes the
+	// channel once all sub-requests have signalled completion.
+	//
+	// GetPrompts returns nil when there's no array to split (single-string prompt,
+	// chat/generation/responses requests); in that case we enqueue the original
+	// request as a single sub-request at ChoiceIdx 0.
+	prompts := req.GetPrompts()
 	channel := common.Channel[*ResponseInfo]{
 		Channel: make(chan *ResponseInfo, s.Context.Config.MaxModelLen),
-		Name:    "responseInfo",
+		Name:    "responseInfo-" + req.GetRequestID(),
 	}
-	reqCtx := req.buildRequestContext(&s.Context, channel)
-	common.WriteToChannel(s.newRequests, reqCtx, s.Context.logger)
+	var wg sync.WaitGroup
+	if prompts == nil {
+		wg.Add(1)
+		reqCtx := req.buildRequestContext(&s.Context, channel, 0, wg.Done)
+		common.WriteToChannel(s.newRequests, reqCtx, s.Context.logger)
+	} else {
+		wg.Add(len(prompts))
+		for i, prompt := range prompts {
+			newRequestID := fmt.Sprintf("%s-%d", req.GetRequestID(), i)
+			subReq := req.duplicateWithPrompt(prompt, newRequestID)
+			reqCtx := subReq.buildRequestContext(&s.Context, channel, i, wg.Done)
+			common.WriteToChannel(s.newRequests, reqCtx, s.Context.logger)
+		}
+	}
+	go func() {
+		wg.Wait()
+		close(channel.Channel)
+	}()
+
 	return req.IsStream(), &channel, nil, false
 }
 
@@ -381,22 +408,23 @@ func (s *VllmSimulator) dequeue() requestContext {
 
 func (s *VllmSimulator) simulateResponseProcessing(respCtx ResponseContext) {
 	reqCtx := respCtx.RequestContext()
+	choiceIdx := reqCtx.choiceIndex()
 	// Skip delays if finish reason is cache_threshold (immediate return)
 	if respCtx.FinishReason() != nil && *respCtx.FinishReason() == common.CacheThresholdFinishReason {
-		common.WriteToChannel(reqCtx.responseChannel(), &ResponseInfo{RespCtx: respCtx},
+		common.WriteToChannel(reqCtx.responseChannel(), &ResponseInfo{RespCtx: respCtx, ChoiceIdx: choiceIdx},
 			s.Context.logger)
 	} else {
 		s.Context.simulateTTFT(respCtx)
 
 		// Response started
 		common.WriteToChannel(reqCtx.responseChannel(),
-			&ResponseInfo{RespCtx: respCtx, Status: ResponseStatusCreated},
+			&ResponseInfo{RespCtx: respCtx, Status: ResponseStatusCreated, ChoiceIdx: choiceIdx},
 			s.Context.logger)
 
 		startDecode := time.Now()
 		if respIsEmpty(respCtx) {
 			common.WriteToChannel(reqCtx.responseChannel(),
-				&ResponseInfo{RespCtx: respCtx}, s.Context.logger)
+				&ResponseInfo{RespCtx: respCtx, ChoiceIdx: choiceIdx}, s.Context.logger)
 		} else {
 			if respCtx.responseTokens() != nil {
 				for i, token := range respCtx.responseTokens().Tokens {
@@ -412,7 +440,7 @@ func (s *VllmSimulator) simulateResponseProcessing(respCtx ResponseContext) {
 						tokens.Strings = append(tokens.Strings, respCtx.responseTokens().Strings[i])
 					}
 					common.WriteToChannel(reqCtx.responseChannel(),
-						&ResponseInfo{Tokens: tokens, RespCtx: respCtx},
+						&ResponseInfo{Tokens: tokens, RespCtx: respCtx, ChoiceIdx: choiceIdx},
 						s.Context.logger)
 				}
 			} else {
@@ -427,14 +455,14 @@ func (s *VllmSimulator) simulateResponseProcessing(respCtx ResponseContext) {
 							&ResponseInfo{Tokens: &openaiserverapi.Tokenized{
 								Tokens:  []uint32{token},
 								Strings: []string{tc.Function.TokenizedArguments().Strings[i]}},
-								RespCtx: respCtx, ToolCall: &tc}, s.Context.logger)
+								RespCtx: respCtx, ToolCall: &tc, ChoiceIdx: choiceIdx}, s.Context.logger)
 					}
 				}
 			}
 		}
 		common.WriteToChannel(s.Context.metrics.reqDecodeTimeChan, time.Since(startDecode).Seconds(), s.Context.logger)
 	}
-	close(reqCtx.responseChannel().Channel)
+	reqCtx.signalDone()
 }
 
 // request processing finished

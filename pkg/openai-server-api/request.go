@@ -105,6 +105,11 @@ type Request interface {
 	CacheThresholdFinishReason() bool
 	// SetCacheThresholdFinishReason sets cacheThresholdFinishReason
 	SetCacheThresholdFinishReason(bool)
+	// GetPrompts returns the array of prompts from the request when the client
+	// sent an array (TextCompletionsRequest with an array Prompt). Returns nil
+	// when there is no array to split — single-string prompts, chat, generation,
+	// and responses requests.
+	GetPrompts() []string
 }
 
 // baseRequest contains base completions request related information
@@ -284,6 +289,13 @@ func (b *baseRequest) GetCacheHitThreshold() *float64 {
 	return nil
 }
 
+// GetPrompts is the default implementation for request types that can't carry
+// an array of prompts. Returns nil so the simulator enqueues the original
+// request unchanged.
+func (b *baseRequest) GetPrompts() []string {
+	return nil
+}
+
 // CacheThresholdFinishReason returns cacheThresholdFinishReason,  when true,
 // forces a cache_threshold finish reason
 func (b *baseRequest) CacheThresholdFinishReason() bool {
@@ -434,8 +446,8 @@ func (c *ChatCompletionsRequest) GetLogprobs() *int {
 // TextCompletionsRequest defines structure of /completions request
 type TextCompletionsRequest struct {
 	baseCompletionsRequest
-	// Prompt defines request's content
-	Prompt string `json:"prompt"`
+	// Prompt defines request's content - can be a string or array of strings
+	Prompt StringOrArray `json:"prompt"`
 
 	// The maximum number of [tokens](/tokenizer) that can be generated in the
 	// completions.
@@ -449,6 +461,84 @@ type TextCompletionsRequest struct {
 	// a list of the 5 most likely tokens. The API will always return the logprob
 	// of the sampled token, so there may be up to logprobs+1 elements in the response.
 	Logprobs *int `json:"logprobs,omitempty"`
+}
+
+// StringOrArray can hold either a single string or an array of strings
+type StringOrArray struct {
+	isArray bool
+	str     string
+	arr     []string
+}
+
+// NewStringOrArray creates a StringOrArray from a single string
+func NewStringOrArray(s string) StringOrArray {
+	return StringOrArray{
+		isArray: false,
+		str:     s,
+		arr:     nil,
+	}
+}
+
+// NewStringOrArrayFromSlice creates a StringOrArray from a slice of strings
+func NewStringOrArrayFromSlice(arr []string) StringOrArray {
+	return StringOrArray{
+		isArray: true,
+		str:     "",
+		arr:     arr,
+	}
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for StringOrArray
+func (s *StringOrArray) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as a string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		s.isArray = false
+		s.str = str
+		s.arr = nil
+		return nil
+	}
+
+	// Try to unmarshal as an array of strings
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return fmt.Errorf("prompt must be a string or array of strings: %w", err)
+	}
+	s.isArray = true
+	s.str = ""
+	s.arr = arr
+	return nil
+}
+
+// MarshalJSON implements custom JSON marshaling for StringOrArray
+func (s StringOrArray) MarshalJSON() ([]byte, error) {
+	if s.isArray {
+		return json.Marshal(s.arr)
+	}
+	return json.Marshal(s.str)
+}
+
+// String returns the prompt as a single string
+// If it's an array, joins with newlines
+func (s *StringOrArray) String() string {
+	if s.isArray {
+		return strings.Join(s.arr, "\n")
+	}
+	return s.str
+}
+
+// IsArray returns true if the prompt is an array
+func (s *StringOrArray) IsArray() bool {
+	return s.isArray
+}
+
+// Array returns the prompt as an array of strings
+// If it's a single string, returns a slice with one element
+func (s *StringOrArray) Array() []string {
+	if s.isArray {
+		return s.arr
+	}
+	return []string{s.str}
 }
 
 var _ Request = (*TextCompletionsRequest)(nil)
@@ -473,6 +563,15 @@ func (req *TextCompletionsRequest) ExtractMaxTokens() *int64 {
 
 func (t *TextCompletionsRequest) GetLogprobs() *int {
 	return t.Logprobs
+}
+
+// GetPrompts returns the array of prompts if the client sent one, or nil if
+// the request carries a single-string prompt.
+func (t *TextCompletionsRequest) GetPrompts() []string {
+	if t.Prompt.IsArray() {
+		return t.Prompt.Array()
+	}
+	return nil
 }
 
 // GenerationRequest defines structure of generation request

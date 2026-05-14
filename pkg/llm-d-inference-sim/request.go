@@ -29,10 +29,13 @@ import (
 type requestBuilder interface {
 	Unmarshal(data []byte) error
 	validate(toolsValidator *toolsValidator) (string, int)
-	buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo]) requestContext
+	buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo], choiceIdx int, doneFn func()) requestContext
 	AsString() string
 	createResponseContext(reqCtx requestContext, displayModel string, responseTokens *openaiserverapi.Tokenized, finishReason *string,
 		usageData *openaiserverapi.Usage, sendUsageData bool, logprobs *int, toolCalls []openaiserverapi.ToolCall) ResponseContext
+	// duplicateWithPrompt creates a copy of the request with a new prompt and request ID
+	// For requests that don't support multiple prompts, returns the original request
+	duplicateWithPrompt(prompt string, newRequestID string) Request
 }
 
 type Request interface {
@@ -51,6 +54,8 @@ type requestContext interface {
 	responseChannel() common.Channel[*ResponseInfo]
 	tokenizedPromptForEcho() (*openaiserverapi.Tokenized, error)
 	encode() ([]uint32, []string, *openaiserverapi.RenderMMFeatures, error)
+	choiceIndex() int
+	signalDone()
 }
 
 type baseRequestContext struct {
@@ -58,18 +63,32 @@ type baseRequestContext struct {
 	sim             *SimContext
 	startProcessing time.Time
 	respChannel     common.Channel[*ResponseInfo]
+	idx             int
+	doneFn          func()
 }
 
-func newBaseRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo]) baseRequestContext {
+func newBaseRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo], choiceIdx int, doneFn func()) baseRequestContext {
 	return baseRequestContext{
 		sim:             simCtx,
 		startProcessing: time.Now(),
 		respChannel:     channel,
+		idx:             choiceIdx,
+		doneFn:          doneFn,
 	}
 }
 
 func (b *baseRequestContext) responseChannel() common.Channel[*ResponseInfo] {
 	return b.respChannel
+}
+
+func (b *baseRequestContext) choiceIndex() int {
+	return b.idx
+}
+
+func (b *baseRequestContext) signalDone() {
+	if b.doneFn != nil {
+		b.doneFn()
+	}
 }
 
 func (b *baseRequestContext) startProcessingTime() time.Time {

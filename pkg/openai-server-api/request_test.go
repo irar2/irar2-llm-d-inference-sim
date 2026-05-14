@@ -17,6 +17,8 @@ limitations under the License.
 package openaiserverapi
 
 import (
+	"encoding/json"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -50,5 +52,116 @@ var _ = Describe("render requests", func() {
 		Expect(req.Model()).To(Equal(model))
 		Expect(req.Messages).To(HaveLen(1))
 		Expect(req.Endpoint()).To(Equal("/v1/chat/completions"))
+	})
+})
+
+var _ = Describe("StringOrArray", func() {
+	Context("UnmarshalJSON", func() {
+		It("should unmarshal a string prompt", func() {
+			jsonData := []byte(`{"prompt": "Hello, world!"}`)
+			var req TextCompletionsRequest
+			err := json.Unmarshal(jsonData, &req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(req.Prompt.IsArray()).To(BeFalse())
+			Expect(req.Prompt.String()).To(Equal("Hello, world!"))
+		})
+
+		It("should unmarshal an array prompt", func() {
+			jsonData := []byte(`{"prompt": ["Hello", "world"]}`)
+			var req TextCompletionsRequest
+			err := json.Unmarshal(jsonData, &req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(req.Prompt.IsArray()).To(BeTrue())
+			Expect(req.Prompt.String()).To(Equal("Hello\nworld"))
+			arr := req.Prompt.Array()
+			Expect(arr).To(HaveLen(2))
+			Expect(arr[0]).To(Equal("Hello"))
+			Expect(arr[1]).To(Equal("world"))
+		})
+
+		It("should return error for invalid prompt type", func() {
+			jsonData := []byte(`{"prompt": 123}`)
+			var req TextCompletionsRequest
+			err := json.Unmarshal(jsonData, &req)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("prompt must be a string or array of strings"))
+		})
+	})
+
+	Context("MarshalJSON", func() {
+		It("should marshal a string prompt", func() {
+			req := TextCompletionsRequest{
+				Prompt: NewStringOrArray("Hello, world!"),
+			}
+			data, err := json.Marshal(req)
+			Expect(err).NotTo(HaveOccurred())
+			var result map[string]interface{}
+			err = json.Unmarshal(data, &result)
+			Expect(err).NotTo(HaveOccurred())
+			prompt, ok := result["prompt"].(string)
+			Expect(ok).To(BeTrue())
+			Expect(prompt).To(Equal("Hello, world!"))
+		})
+
+		It("should marshal an array prompt", func() {
+			req := TextCompletionsRequest{
+				Prompt: NewStringOrArrayFromSlice([]string{"Hello", "world"}),
+			}
+			data, err := json.Marshal(req)
+			Expect(err).NotTo(HaveOccurred())
+			var result map[string]interface{}
+			err = json.Unmarshal(data, &result)
+			Expect(err).NotTo(HaveOccurred())
+			promptArr, ok := result["prompt"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(promptArr).To(HaveLen(2))
+			Expect(promptArr[0].(string)).To(Equal("Hello"))
+			Expect(promptArr[1].(string)).To(Equal("world"))
+		})
+	})
+
+	Context("Helper methods", func() {
+		It("should convert string to array with one element", func() {
+			s := NewStringOrArray("test")
+			arr := s.Array()
+			Expect(arr).To(HaveLen(1))
+			Expect(arr[0]).To(Equal("test"))
+		})
+
+		It("should join array elements with newlines", func() {
+			s := NewStringOrArrayFromSlice([]string{"line1", "line2", "line3"})
+			Expect(s.String()).To(Equal("line1\nline2\nline3"))
+		})
+
+		It("should correctly identify array type", func() {
+			str := NewStringOrArray("test")
+			arr := NewStringOrArrayFromSlice([]string{"test"})
+			Expect(str.IsArray()).To(BeFalse())
+			Expect(arr.IsArray()).To(BeTrue())
+		})
+	})
+})
+
+var _ = Describe("GetPrompts", func() {
+	It("returns nil for a TextCompletionsRequest with a single-string prompt", func() {
+		req := &TextCompletionsRequest{Prompt: NewStringOrArray("hello")}
+		Expect(req.GetPrompts()).To(BeNil())
+	})
+
+	It("returns the array for a TextCompletionsRequest with an array prompt", func() {
+		req := &TextCompletionsRequest{Prompt: NewStringOrArrayFromSlice([]string{"a", "b", "c"})}
+		Expect(req.GetPrompts()).To(Equal([]string{"a", "b", "c"}))
+	})
+
+	It("returns a non-nil empty slice for a TextCompletionsRequest with an empty array prompt", func() {
+		req := &TextCompletionsRequest{Prompt: NewStringOrArrayFromSlice([]string{})}
+		prompts := req.GetPrompts()
+		Expect(prompts).NotTo(BeNil())
+		Expect(prompts).To(BeEmpty())
+	})
+
+	It("returns nil for a ChatCompletionsRequest (default implementation)", func() {
+		req := &ChatCompletionsRequest{Messages: []Message{{Role: RoleUser, Content: ChatComplContent{Raw: "hi"}}}}
+		Expect(req.GetPrompts()).To(BeNil())
 	})
 })

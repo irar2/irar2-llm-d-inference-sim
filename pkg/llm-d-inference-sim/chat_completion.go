@@ -50,9 +50,10 @@ func (c *ChatCompletionsRequest) validate(toolsValidator *toolsValidator) (strin
 	return validateRequest(c)
 }
 
-func (c *ChatCompletionsRequest) buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo]) requestContext {
+func (c *ChatCompletionsRequest) buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo],
+	choiceIdx int, doneFn func()) requestContext {
 	reqCtx := &chatCompletionReqCtx{
-		baseRequestContext: newBaseRequestContext(simCtx, channel),
+		baseRequestContext: newBaseRequestContext(simCtx, channel, choiceIdx, doneFn),
 		req:                c,
 	}
 	// wire chatCompletionReqCtx into embedded requestContext interface
@@ -114,6 +115,11 @@ func (c *chatCompletionReqCtx) createToolCalls() ([]openaiserverapi.ToolCall, in
 		return toolCalls, completionTokens, finishReason, err
 	}
 	return nil, 0, "", nil
+}
+
+// duplicateWithPrompt returns the original request (chat completions don't support prompt arrays)
+func (c *ChatCompletionsRequest) duplicateWithPrompt(prompt string, newRequestID string) Request {
+	return c
 }
 
 var _ requestContext = (*chatCompletionReqCtx)(nil)

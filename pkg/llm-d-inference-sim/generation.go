@@ -34,9 +34,10 @@ func (g *GenerationRequest) validate(toolsValidator *toolsValidator) (string, in
 	return validateRequest(g)
 }
 
-func (g *GenerationRequest) buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo]) requestContext {
+func (g *GenerationRequest) buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo],
+	choiceIdx int, doneFn func()) requestContext {
 	reqCtx := &generationReqCtx{
-		baseRequestContext: newBaseRequestContext(simCtx, channel),
+		baseRequestContext: newBaseRequestContext(simCtx, channel, choiceIdx, doneFn),
 		req:                g,
 	}
 	// wire generationReqCtx into embedded requestContext interface
@@ -56,6 +57,11 @@ func (g *GenerationRequest) createResponseContext(reqCtx requestContext, display
 	return &generationResponseCtx{
 		baseResponseContext: base,
 	}
+}
+
+// duplicateWithPrompt returns the original request (generation requests don't support prompt arrays)
+func (g *GenerationRequest) duplicateWithPrompt(prompt string, newRequestID string) Request {
+	return g
 }
 
 var _ Request = (*GenerationRequest)(nil)

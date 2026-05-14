@@ -37,9 +37,10 @@ func (r *ResponsesRequest) validate(toolsValidator *toolsValidator) (string, int
 	return validateRequest(r)
 }
 
-func (r *ResponsesRequest) buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo]) requestContext {
+func (r *ResponsesRequest) buildRequestContext(simCtx *SimContext, channel common.Channel[*ResponseInfo],
+	choiceIdx int, doneFn func()) requestContext {
 	reqCtx := &responsesReqCtx{
-		baseRequestContext: newBaseRequestContext(simCtx, channel),
+		baseRequestContext: newBaseRequestContext(simCtx, channel, choiceIdx, doneFn),
 		req:                r,
 	}
 	reqCtx.requestContext = reqCtx
@@ -58,6 +59,11 @@ func (r *ResponsesRequest) createResponseContext(reqCtx requestContext, displayM
 	return &responsesResponseCtx{
 		baseResponseContext: base,
 	}
+}
+
+// duplicateWithPrompt returns the original request (responses requests don't support prompt arrays)
+func (r *ResponsesRequest) duplicateWithPrompt(prompt string, newRequestID string) Request {
+	return r
 }
 
 var _ Request = (*ResponsesRequest)(nil)
