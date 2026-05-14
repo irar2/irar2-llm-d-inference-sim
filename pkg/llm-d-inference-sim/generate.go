@@ -21,6 +21,7 @@ import (
 
 	"github.com/llm-d/llm-d-inference-sim/pkg/common"
 	openaiserverapi "github.com/llm-d/llm-d-inference-sim/pkg/openai-server-api"
+	"github.com/valyala/fasthttp"
 )
 
 // Implementation of request for generate requests
@@ -37,6 +38,14 @@ func (g *GenerateRequest) Unmarshal(data []byte) error {
 }
 
 func (g *GenerateRequest) validate(toolsValidator *toolsValidator) (string, int) {
+	if g.TokenIDs == nil {
+		return "Missing input token_ids", fasthttp.StatusBadRequest
+	}
+
+	if g.SamplingParams == nil {
+		return "Missing sampling_params field", fasthttp.StatusBadRequest
+	}
+
 	return validateRequest(g)
 }
 

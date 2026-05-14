@@ -711,8 +711,8 @@ func (req *ResponsesRequest) ExtractMaxTokens() *int64 {
 // GenerateRequest defines structure of generate request
 type GenerateRequest struct {
 	baseRequest
-	TokenIDs       []uint32       `json:"token_ids"`
-	SamplingParams SamplingParams `json:"sampling_params"`
+	TokenIDs       []uint32        `json:"token_ids"`
+	SamplingParams *SamplingParams `json:"sampling_params"`
 }
 
 type SamplingParams struct {
