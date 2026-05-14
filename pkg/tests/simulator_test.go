@@ -425,7 +425,7 @@ var _ = Describe("Simulator", func() {
 					}
 				}
 				Expect(stream.Err()).To(HaveOccurred())
-				// TODO: check after fixing inconsistensy in error responses in HTTP
+				// TODO: check after fixing inconsistency in error responses in HTTP
 				// var oaiErr *openai.Error
 				// Expect(errors.As(stream.Err(), &oaiErr)).To(BeTrue())
 				// Expect(oaiErr.StatusCode).To(Equal(fasthttp.StatusTooManyRequests))

@@ -86,4 +86,3 @@ var _ = Describe("duplicateWithPrompt", func() {
 		Expect(orig.Prompt.Array()).To(Equal(origPromptArr))
 	})
 })
-
