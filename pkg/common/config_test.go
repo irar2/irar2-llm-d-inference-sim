@@ -17,6 +17,8 @@ limitations under the License.
 package common
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"time"
 
@@ -267,4 +269,62 @@ var _ = Describe("admin struct tags", func() {
 		}))
 	})
 
+})
+
+var _ = Describe("Configuration.load kv-cache YAML folding", func() {
+	writeConfig := func(contents string) string {
+		dir := GinkgoT().TempDir()
+		path := filepath.Join(dir, "config.yaml")
+		Expect(os.WriteFile(path, []byte(contents), 0o644)).To(Succeed())
+		return path
+	}
+
+	It("populates KVCache from the nested kvcache block", func() {
+		c := NewConfig()
+		Expect(c.load(writeConfig(`
+model: test-model
+kvcache:
+  enable-kvcache: true
+  kv-cache-size: 2048
+  block-size: 32
+`))).To(Succeed())
+
+		Expect(c.KVCache.EnableKVCache).To(BeTrue())
+		Expect(c.KVCache.KVCacheSize).To(Equal(2048))
+		Expect(c.KVCache.TokenBlockSize).To(Equal(32))
+	})
+
+	It("populates KVCache from legacy flat top-level keys", func() {
+		c := NewConfig()
+		Expect(c.load(writeConfig(`
+model: test-model
+enable-kvcache: true
+kv-cache-size: 2048
+block-size: 32
+`))).To(Succeed())
+
+		Expect(c.KVCache.EnableKVCache).To(BeTrue())
+		Expect(c.KVCache.KVCacheSize).To(Equal(2048))
+		Expect(c.KVCache.TokenBlockSize).To(Equal(32))
+	})
+
+	It("errors when kv-cache settings mix the flat and nested layouts", func() {
+		c := NewConfig()
+		Expect(c.load(writeConfig(`
+model: test-model
+kv-cache-size: 111
+kvcache:
+  kv-cache-size: 222
+`))).ToNot(Succeed())
+	})
+
+	It("errors when a flat kv-cache key is set alongside an unrelated nested key", func() {
+		c := NewConfig()
+		Expect(c.load(writeConfig(`
+model: test-model
+kv-cache-size: 111
+kvcache:
+  block-size: 32
+`))).ToNot(Succeed())
+	})
 })
