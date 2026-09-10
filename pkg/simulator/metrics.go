@@ -428,7 +428,7 @@ func (s *SimContext) setInitialPrometheusMetrics(cacheConfig *prometheus.GaugeVe
 	s.metrics.kvCacheUsagePercentage.WithLabelValues(s.Config().DisplayModelName).Set(0)
 
 	s.metrics.loraInfo.WithLabelValues(
-		strconv.Itoa(s.Config().MaxLoras),
+		strconv.Itoa(s.Config().Lora.MaxLoras),
 		"",
 		"").Set(float64(time.Now().Unix()))
 
@@ -461,7 +461,7 @@ func (s *SimContext) reportLoras() {
 	})
 
 	s.metrics.loraInfo.WithLabelValues(
-		strconv.Itoa(s.Config().MaxLoras),
+		strconv.Itoa(s.Config().Lora.MaxLoras),
 		strings.Join(runningLoras, ","),
 		strings.Join(waitingLoras, ",")).Set(float64(time.Now().Unix()))
 }
